@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liga de Biliard Class Lounge</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1f2937">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+:root{
+  --bg:#f4f6f8;--card:#fff;--ink:#17202a;--muted:#6b7280;--line:#dfe3e8;
+  --dark:#1f2937;--green:#147d64;--amber:#b7791f;--red:#b42318;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--dark);color:#fff;padding:18px 16px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px} header p{margin:5px 0 0;font-size:12px;opacity:.82}
+main{max-width:980px;margin:auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 1px 3px #0000000a}
+h2{font-size:17px;margin:0 0 12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,.btn{border:0;border-radius:10px;padding:11px 13px;font-weight:700;cursor:pointer}
+.primary{background:var(--dark);color:#fff}.green{background:var(--green);color:#fff}
+.light{background:#edf0f3;color:var(--ink)}.danger{background:#fee4e2;color:var(--red)}
+input,select{padding:10px;border:1px solid #cfd5dc;border-radius:9px;background:#fff;min-width:0}
+input[type=number]{width:82px}
+.list{display:grid;gap:7px}
+.person,.match{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+.person{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.small{font-size:12px;color:var(--muted)}
+.status{display:inline-block;font-size:11px;font-weight:700;padding:4px 7px;border-radius:999px}
+.s-none{background:#eef1f4;color:#59636e}.s-scheduled{background:#fff4d6;color:#8a5a00}.s-played{background:#ddf6ed;color:#0b6b50}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}
+th{background:#f3f5f7}.left{text-align:left}
+.rank{font-weight:700}
+.notice{padding:10px 11px;background:#f8fafc;border-left:4px solid #718096;border-radius:7px;font-size:12px}
+dialog{border:0;border-radius:14px;width:min(94vw,620px);padding:0;box-shadow:0 24px 60px #0005}
+dialog::backdrop{background:#0007}
+.modal{padding:16px}.modal h3{margin:0 0 14px}.modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+label{display:block;font-size:12px;font-weight:700;margin:8px 0 4px}
+.full{width:100%}
+.hidden{display:none!important}
+@media(max-width:650px){.grid2{grid-template-columns:1fr} table{font-size:12px} th,td{padding:7px 3px}}
+@media print{
+  body{background:#fff}
+  header,.no-print,#participantsCard,#matchesCard,#toolbar{display:none!important}
+  main{max-width:none;padding:0}
+  #rankingCard{display:block!important;border:0;box-shadow:none;margin:0;padding:0}
+  #rankingCard h2{font-size:20px;text-align:center;margin-bottom:4px}
+  #printSubtitle{display:block!important;text-align:center;margin-bottom:15px;color:#555;font-size:12px}
+  table{font-size:12px}
+  th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:A4 portrait;margin:12mm}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎱 Liga de Biliard Class Lounge</h1>
+  <p>Administrare participanți, programări, rezultate și clasament</p>
+</header>
+
+<main>
+  <div id="toolbar" class="card no-print">
+    <div class="row">
+      <button class="primary" onclick="openSchedule()">Înregistrează programare</button>
+      <button class="green" onclick="openScore()">Înregistrează scor</button>
+      <button class="light" onclick="generateRanking()">Vezi clasamentul</button>
+      <button class="light" onclick="exportBackup()">Backup date</button>
+      <label class="btn light" style="display:inline-block">Import backup<input id="importFile" type="file" accept=".json" hidden onchange="importBackup(event)"></label>
+    </div>
+  </div>
+
+  <section id="participantsCard" class="card">
+    <h2>Participanți</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input id="newPlayer" placeholder="Nume participant" style="flex:1">
+      <button class="primary" onclick="addPlayer()">Adaugă participant</button>
+    </div>
+    <div class="notice">Lista este afișată mereu în ordine alfabetică. Adăugarea sau ștergerea unui participant recalculează automat lista meciurilor posibile.</div>
+    <div id="playersList" class="list" style="margin-top:10px"></div>
+  </section>
+
+  <section id="matchesCard" class="card">
+    <h2>Meciuri</h2>
+    <div class="small" id="matchSummary"></div><div class="notice" style="margin-top:8px">Apasă pe orice meci pentru a modifica direct programarea, scorul sau Break&Run.</div>
+    <div id="matchesList" class="list" style="margin-top:10px"></div>
+  </section>
+
+  <section id="rankingCard" class="card">
+    <h2>Clasament</h2>
+    <div id="printSubtitle" class="hidden">Liga de Biliard Class Lounge — clasament oficial</div>
+    <div class="small no-print" style="margin-bottom:8px">Departajare: victorii → frame-uri câștigate → Break&Run → meci direct.</div>
+    <div id="rankingWrap"></div>
+    <div class="row no-print" style="margin-top:12px">
+      <button class="green" type="button" id="publishBtn" onclick="publishOnline()">Update clasament online</button><a class="btn light" href="/clasament" target="_blank" rel="noopener">Deschide clasamentul public</a>
+    </div>
+  </section>
+</main>
+
+
+<dialog id="matchEditDialog"><div class="modal">
+  <h3 id="matchEditTitle">Modifică meci</h3>
+  <input id="matchEditId" type="hidden">
+  <div class="grid2">
+    <div><label>Data</label><input id="matchEditDate" type="date" class="full"></div>
+    <div><label>Ora</label><input id="matchEditTime" type="time" class="full" max="18:00"></div>
+  </div>
+  <div class="grid2">
+    <div><label id="matchEditScore1Label">Scor jucător 1</label><input id="matchEditScore1" type="number" min="0" class="full"></div>
+    <div><label id="matchEditScore2Label">Scor jucător 2</label><input id="matchEditScore2" type="number" min="0" class="full"></div>
+  </div>
+  <div class="grid2">
+    <div><label id="matchEditBreak1Label">Break&Run jucător 1</label><input id="matchEditBreak1" type="number" min="0" value="0" class="full"></div>
+    <div><label id="matchEditBreak2Label">Break&Run jucător 2</label><input id="matchEditBreak2" type="number" min="0" value="0" class="full"></div>
+  </div>
+  <div class="small" style="margin-top:8px">Poți modifica orice informație. Dacă ștergi ambele scoruri, meciul revine la PROGRAMAT sau NEPROGRAMAT.</div>
+  <div class="actions">
+    <button class="danger" type="button" onclick="clearMatchData()">Șterge datele meciului</button>
+    <button class="light" type="button" onclick="matchEditDialog.close()">Renunță</button>
+    <button class="green" type="button" onclick="saveMatchEdit()">Salvează modificările</button>
+  </div>
+</div></dialog>
+
+<dialog id="scheduleDialog"><div class="modal">
+  <h3>Înregistrează programare</h3>
+  <label>Meci</label><select id="scheduleMatch" class="full"></select>
+  <div class="grid2">
+    <div><label>Data</label><input id="scheduleDate" type="date" class="full"></div>
+    <div><label>Ora</label><input id="scheduleTime" type="time" class="full" max="18:00"></div>
+  </div>
+  <div class="small" style="margin-top:8px">Ultima oră permisă pentru programarea unui meci este 18:00.</div>
+  <div class="actions"><button class="light" onclick="scheduleDialog.close()">Renunță</button><button class="primary" onclick="saveSchedule()">Salvează</button></div>
+</div></dialog>
+
+<dialog id="scoreDialog"><div class="modal">
+  <h3>Înregistrează scor</h3>
+  <label>Meci</label><select id="scoreMatch" class="full" onchange="refreshScoreLabels()"></select>
+  <div class="grid2">
+    <div><label id="p1ScoreLabel">Scor jucător 1</label><input id="score1" type="number" min="0" class="full"></div>
+    <div><label id="p2ScoreLabel">Scor jucător 2</label><input id="score2" type="number" min="0" class="full"></div>
+  </div>
+  <div class="grid2">
+    <div><label id="p1BreakLabel">Break&Run jucător 1</label><input id="break1" type="number" min="0" value="0" class="full"></div>
+    <div><label id="p2BreakLabel">Break&Run jucător 2</label><input id="break2" type="number" min="0" value="0" class="full"></div>
+  </div>
+  <div class="actions"><button class="light" onclick="scoreDialog.close()">Renunță</button><button class="green" onclick="saveScore()">Salvează rezultatul</button></div>
+</div></dialog>
+
+<dialog id="editDialog"><div class="modal">
+  <h3>Modifică participant</h3>
+  <input id="editName" class="full">
+  <input id="editOld" type="hidden">
+  <div class="actions"><button class="light" onclick="editDialog.close()">Renunță</button><button class="primary" onclick="saveEdit()">Salvează</button></div>
+</div></dialog>
+
+<script>
+const KEY='class_liga_biliard_v1';
+const initialPlayers=['Cata','Calin','Boro','Razvan','Peo','Andrei','Iulian'];
+let state=loadState();
+
+function norm(s){return s.trim().replace(/\s+/g,' ')}
+function sortAlpha(a,b){return a.localeCompare(b,'ro',{sensitivity:'base'})}
+function matchId(a,b){return [a,b].sort(sortAlpha).join('|||')}
+
+function defaultState(){
+  return {players:[...initialPlayers].sort(sortAlpha),matches:{}};
+}
+function loadState(){
+  try{const x=JSON.parse(localStorage.getItem(KEY)); if(x&&Array.isArray(x.players)&&x.matches)return x}catch(e){}
+  return defaultState();
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
+function allPairs(){
+  const p=[...state.players].sort(sortAlpha), out=[];
+  for(let i=0;i<p.length;i++)for(let j=i+1;j<p.length;j++){
+    const id=matchId(p[i],p[j]);
+    out.push({id,a:p[i],b:p[j],...(state.matches[id]||{})});
+  }
+  return out;
+}
+function ensureMatches(){
+  const valid=new Set(allPairs().map(x=>x.id));
+  Object.keys(state.matches).forEach(k=>{if(!valid.has(k))delete state.matches[k]});
+}
+
+function addPlayer(){
+  const n=norm(document.getElementById('newPlayer').value);
+  if(!n)return;
+  if(state.players.some(p=>p.localeCompare(n,'ro',{sensitivity:'base'})===0)){alert('Participantul există deja.');return}
+  state.players.push(n); state.players.sort(sortAlpha); document.getElementById('newPlayer').value=''; ensureMatches(); save();
+}
+function openEdit(name){editOld.value=name;editName.value=name;editDialog.showModal()}
+function saveEdit(){
+  const old=editOld.value, n=norm(editName.value);
+  if(!n)return;
+  if(state.players.some(p=>p!==old&&p.localeCompare(n,'ro',{sensitivity:'base'})===0)){alert('Există deja un participant cu acest nume.');return}
+  const oldMatches=JSON.parse(JSON.stringify(state.matches));
+  state.players=state.players.map(p=>p===old?n:p).sort(sortAlpha);
+  state.matches={};
+  for(const [id,m] of Object.entries(oldMatches)){
+    const parts=id.split('|||').map(x=>x===old?n:x);
+    if(parts[0]===parts[1])continue;
+    const nid=matchId(parts[0],parts[1]);
+    state.matches[nid]=m;
+  }
+  ensureMatches(); editDialog.close(); save();
+}
+function deletePlayer(name){
+  const affected=allPairs().filter(m=>(m.a===name||m.b===name)&&(m.score1!==undefined||m.date));
+  const extra=affected.length?`\nExistă ${affected.length} meci(uri) cu date introduse pentru acest participant.`:'';
+  if(!confirm(`Ștergi participantul ${name}?${extra}`))return;
+  state.players=state.players.filter(p=>p!==name); ensureMatches(); save();
+}
+
+function renderPlayers(){
+  playersList.innerHTML='';
+  [...state.players].sort(sortAlpha).forEach(p=>{
+    const d=document.createElement('div');d.className='person';
+    d.innerHTML=`<b>${esc(p)}</b><div class="row"><button class="light" onclick='openEdit(${JSON.stringify(p)})'>Modifică</button><button class="danger" onclick='deletePlayer(${JSON.stringify(p)})'>Șterge</button></div>`;
+    playersList.appendChild(d);
+  });
+}
+
+function statusOf(m){
+  if(m.score1!==undefined&&m.score2!==undefined)return ['JUCAT','s-played'];
+  if(m.date&&m.time)return ['PROGRAMAT','s-scheduled'];
+  return ['NEPROGRAMAT','s-none'];
+}
+function renderMatches(){
+  const pairs=allPairs(); matchesList.innerHTML='';
+  const played=pairs.filter(m=>statusOf(m)[0]==='JUCAT').length;
+  const scheduled=pairs.filter(m=>statusOf(m)[0]==='PROGRAMAT').length;
+  matchSummary.textContent=`${pairs.length} meciuri totale • ${played} jucate • ${scheduled} programate • ${pairs.length-played-scheduled} neprogramate`;
+  pairs.forEach((m,i)=>{
+    const [st,cls]=statusOf(m);
+    const when=m.date&&m.time?` • ${fmtDate(m.date)} ${m.time}`:'';
+    const score=st==='JUCAT'?` • scor ${m.score1}-${m.score2} • B&R ${m.break1||0}-${m.break2||0}`:'';
+    const d=document.createElement('button');
+    d.type='button';
+    d.className='match';
+    d.style.width='100%';
+    d.style.textAlign='left';
+    d.style.fontWeight='400';
+    d.style.background='#fff';
+    d.style.color='inherit';
+    d.setAttribute('aria-label',`Modifică meciul ${m.a} - ${m.b}`);
+    d.innerHTML=`<div><b>${i+1}. ${esc(m.a)} – ${esc(m.b)}</b> <span class="status ${cls}">${st}</span></div><div class="small">${when}${score}</div>`;
+    d.addEventListener('click',()=>openMatchEdit(m.id));
+    matchesList.appendChild(d);
+  })
+}
+
+function selectOptions(sel, filterFn){
+  const ms=allPairs().filter(filterFn||(()=>true));
+  sel.innerHTML=ms.map(m=>`<option value="${escAttr(m.id)}">${esc(m.a)} – ${esc(m.b)}</option>`).join('');
+}
+
+function openMatchEdit(id){
+  const m=allPairs().find(x=>x.id===id); if(!m)return;
+  const old=state.matches[id]||{};
+  matchEditId.value=id;
+  matchEditTitle.textContent=`Modifică: ${m.a} – ${m.b}`;
+  matchEditDate.value=old.date||'';
+  matchEditTime.value=old.time||'';
+  matchEditScore1.value=old.score1??'';
+  matchEditScore2.value=old.score2??'';
+  matchEditBreak1.value=old.break1??0;
+  matchEditBreak2.value=old.break2??0;
+  matchEditScore1Label.textContent=`Scor ${m.a}`;
+  matchEditScore2Label.textContent=`Scor ${m.b}`;
+  matchEditBreak1Label.textContent=`Break&Run ${m.a}`;
+  matchEditBreak2Label.textContent=`Break&Run ${m.b}`;
+  matchEditDialog.showModal();
+}
+function saveMatchEdit(){
+  const id=matchEditId.value;
+  const date=matchEditDate.value;
+  const time=matchEditTime.value;
+  const s1raw=matchEditScore1.value;
+  const s2raw=matchEditScore2.value;
+  const b1=Number(matchEditBreak1.value||0), b2=Number(matchEditBreak2.value||0);
+  if(time && time>'18:00'){alert('Ultima oră disponibilă pentru programare este 18:00.');return}
+  if((s1raw===''&&s2raw!=='')||(s1raw!==''&&s2raw==='')){alert('Completează ambele scoruri sau lasă-le pe ambele goale.');return}
+  const next={};
+  if(date)next.date=date;
+  if(time)next.time=time;
+  if(s1raw!==''&&s2raw!==''){
+    const s1=Number(s1raw),s2=Number(s2raw);
+    if(!Number.isFinite(s1)||!Number.isFinite(s2)||s1<0||s2<0||s1===s2){alert('Scorul nu este valid și nu poate fi egal.');return}
+    if(!Number.isFinite(b1)||!Number.isFinite(b2)||b1<0||b2<0){alert('Valorile Break&Run nu sunt valide.');return}
+    next.score1=s1;next.score2=s2;next.break1=b1;next.break2=b2;
+  }
+  state.matches[id]=next;
+  matchEditDialog.close();save();
+}
+function clearMatchData(){
+  const id=matchEditId.value;
+  if(!confirm('Ștergi programarea, scorul și Break&Run pentru acest meci?'))return;
+  delete state.matches[id];
+  matchEditDialog.close();save();
+}
+
+function openSchedule(){
+  selectOptions(scheduleMatch);
+  scheduleDate.value=''; scheduleTime.value='';
+  if(!scheduleMatch.options.length){alert('Nu există meciuri.');return}
+  scheduleDialog.showModal();
+}
+function saveSchedule(){
+  const id=scheduleMatch.value, date=scheduleDate.value, time=scheduleTime.value;
+  if(!date||!time){alert('Completează data și ora.');return}
+  if(time>'18:00'){alert('Ultima oră disponibilă pentru programare este 18:00.');return}
+  state.matches[id]={...(state.matches[id]||{}),date,time};
+  scheduleDialog.close();save();
+}
+function openScore(){
+  selectOptions(scoreMatch);
+  if(!scoreMatch.options.length){alert('Nu există meciuri.');return}
+  score1.value='';score2.value='';break1.value=0;break2.value=0;
+  refreshScoreLabels(); scoreDialog.showModal();
+}
+function refreshScoreLabels(){
+  const m=allPairs().find(x=>x.id===scoreMatch.value); if(!m)return;
+  p1ScoreLabel.textContent=`Scor ${m.a}`; p2ScoreLabel.textContent=`Scor ${m.b}`;
+  p1BreakLabel.textContent=`Break&Run ${m.a}`; p2BreakLabel.textContent=`Break&Run ${m.b}`;
+  const old=state.matches[m.id]||{};
+  score1.value=old.score1??'';score2.value=old.score2??'';break1.value=old.break1??0;break2.value=old.break2??0;
+}
+function saveScore(){
+  const id=scoreMatch.value,s1=Number(score1.value),s2=Number(score2.value),b1=Number(break1.value||0),b2=Number(break2.value||0);
+  if(score1.value===''||score2.value===''){alert('Completează ambele scoruri.');return}
+  if(s1===s2){alert('Meciul nu poate fi înregistrat la egalitate.');return}
+  if([s1,s2,b1,b2].some(n=>n<0||!Number.isFinite(n))){alert('Valorile introduse nu sunt valide.');return}
+  state.matches[id]={...(state.matches[id]||{}),score1:s1,score2:s2,break1:b1,break2:b2};
+  scoreDialog.close();save();
+}
+
+function stats(){
+  const s={};
+  state.players.forEach(p=>s[p]={name:p,mj:0,v:0,i:0,frames:0,br:0});
+  allPairs().forEach(m=>{
+    if(m.score1===undefined||m.score2===undefined)return;
+    s[m.a].mj++;s[m.b].mj++;
+    s[m.a].frames+=Number(m.score1);s[m.b].frames+=Number(m.score2);
+    s[m.a].br+=Number(m.break1||0);s[m.b].br+=Number(m.break2||0);
+    if(Number(m.score1)>Number(m.score2)){s[m.a].v++;s[m.b].i++}else{s[m.b].v++;s[m.a].i++}
+  });
+  return s;
+}
+function directWinner(a,b){
+  const m=allPairs().find(x=>x.id===matchId(a,b));
+  if(!m||m.score1===undefined||m.score2===undefined)return null;
+  if(m.a===a)return Number(m.score1)>Number(m.score2)?a:b;
+  return Number(m.score2)>Number(m.score1)?a:b;
+}
+function ranking(){
+  const arr=Object.values(stats());
+  arr.sort((x,y)=> y.v-x.v || y.frames-x.frames || y.br-x.br);
+  // Resolve only exact two-person ties with direct match.
+  let i=0;
+  while(i<arr.length){
+    let j=i+1;
+    while(j<arr.length&&arr[j].v===arr[i].v&&arr[j].frames===arr[i].frames&&arr[j].br===arr[i].br)j++;
+    const group=arr.slice(i,j);
+    if(group.length===2){
+      const w=directWinner(group[0].name,group[1].name);
+      if(w&&group[1].name===w){arr[i]=group[1];arr[i+1]=group[0]}
+    }
+    // For groups >2, don't invent a criterion; they remain tied.
+    i=j;
+  }
+  // assign ranks: same rank if still tied after all available criteria
+  let rank=1;
+  arr.forEach((x,idx)=>{
+    if(idx===0){x.rank=1;return}
+    const prev=arr[idx-1];
+    const sameBasic=x.v===prev.v&&x.frames===prev.frames&&x.br===prev.br;
+    if(!sameBasic){rank=idx+1;x.rank=rank;return}
+    if(directWinner(x.name,prev.name)){x.rank=idx+1;rank=idx+1}
+    else x.rank=prev.rank;
+  });
+  return arr;
+}
+function generateRanking(){renderRanking();rankingCard.scrollIntoView({behavior:'smooth'})}
+function renderRanking(){
+  const r=ranking();
+  rankingWrap.innerHTML=`<table><thead><tr><th>Loc</th><th class="left">Jucător</th><th>MJ</th><th>V</th><th>I</th><th>Frame-uri</th><th>Break&Run</th></tr></thead><tbody>`+
+  r.map(x=>`<tr><td class="rank">${x.rank}</td><td class="left"><b>${esc(x.name)}</b></td><td>${x.mj}</td><td>${x.v}</td><td>${x.i}</td><td>${x.frames}</td><td>${x.br}</td></tr>`).join('')+
+  `</tbody></table>`;
+}
+async function publishOnline(){
+  const key = prompt('Introdu cheia de administrare pentru publicare:');
+  if(!key) return;
+  const btn=document.getElementById('publishBtn');
+  const old=btn.textContent;
+  btn.disabled=true; btn.textContent='Se publică...';
+  try{
+    const payload={
+      players:[...state.players],
+      matches:state.matches,
+      ranking:ranking(),
+      publishedAt:new Date().toISOString()
+    };
+    const res=await fetch('/api/publish',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Admin-Key':key},
+      body:JSON.stringify(payload)
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error||'Publicarea a eșuat.');
+    alert('Clasamentul online a fost actualizat. Linkul public rămâne același.');
+  }catch(err){
+    alert(err.message||'Nu s-a putut publica.');
+  }finally{
+    btn.disabled=false; btn.textContent=old;
+  }
+}
+
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='liga-biliard-backup.json';a.click();URL.revokeObjectURL(a.href);
+}
+function importBackup(e){
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{
+    try{
+      const x=JSON.parse(rd.result);
+      if(!Array.isArray(x.players)||!x.matches)throw new Error();
+      state=x;state.players=state.players.map(norm).sort(sortAlpha);ensureMatches();save();alert('Backup importat.');
+    }catch(err){alert('Fișier backup invalid.')}
+  };rd.readAsText(f);e.target.value='';
+}
+function fmtDate(d){const [y,m,day]=d.split('-');return `${day}.${m}.${y}`}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return esc(s)}
+function renderAll(){renderPlayers();renderMatches();renderRanking()}
+ensureMatches();renderAll();
+</script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clasament Liga de Biliard Class Lounge</title>
+<meta name="theme-color" content="#1f2937">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;color:#17202a}
+header{background:#1f2937;color:#fff;padding:18px 16px}header h1{margin:0;font-size:21px}header p{margin:5px 0 0;opacity:.8;font-size:12px}
+main{max-width:900px;margin:auto;padding:14px}.card{background:#fff;border:1px solid #dfe3e8;border-radius:14px;padding:14px;margin-bottom:14px}
+h2{font-size:17px;margin:0 0 10px}.muted{font-size:12px;color:#6b7280}.error{padding:12px;background:#fff0f0;border-radius:10px;color:#9b1c1c}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;border-bottom:1px solid #e3e6ea;text-align:center}th{background:#f2f4f6}.left{text-align:left}
+.match{padding:10px 0;border-bottom:1px solid #e3e6ea}.status{font-size:11px;font-weight:700;border-radius:99px;padding:3px 7px;background:#eef1f4}
+.played{background:#ddf6ed;color:#0b6b50}.scheduled{background:#fff4d6;color:#8a5a00}
+@media(max-width:560px){table{font-size:12px}th,td{padding:7px 3px}}
+</style>
+</head>
+<body>
+<header><h1>🎱 Liga de Biliard Class Lounge</h1><p>Clasament și situația meciurilor</p></header>
+<main>
+<section class="card">
+<h2>Clasament</h2>
+<div class="muted" id="updated">Se încarcă ultima actualizare…</div>
+<div id="ranking" style="margin-top:10px"></div>
+</section>
+<section class="card">
+<h2>Meciuri</h2>
+<div id="matches"></div>
+</section>
+</main>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate=d=>{if(!d)return'';const p=d.split('-');return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:d};
+const alpha=(a,b)=>a.localeCompare(b,'ro',{sensitivity:'base'});
+const idFor=(a,b)=>[a,b].sort(alpha).join('|||');
+
+async function load(){
+ try{
+  const res=await fetch('/api/standings',{cache:'no-store'});
+  if(res.status===404){throw new Error('Clasamentul nu a fost publicat încă.');}
+  const data=await res.json();
+  if(!res.ok)throw new Error(data.error||'Nu s-au putut încărca datele.');
+  const when=data.publishedAt?new Date(data.publishedAt).toLocaleString('ro-RO'):'';
+  document.getElementById('updated').textContent=when?`Ultima actualizare: ${when}`:'';
+  const r=Array.isArray(data.ranking)?data.ranking:[];
+  document.getElementById('ranking').innerHTML=`<table><thead><tr><th>Loc</th><th class="left">Jucător</th><th>MJ</th><th>V</th><th>I</th><th>Frame-uri</th><th>Break&Run</th></tr></thead><tbody>${r.map(x=>`<tr><td><b>${esc(x.rank)}</b></td><td class="left"><b>${esc(x.name)}</b></td><td>${esc(x.mj)}</td><td>${esc(x.v)}</td><td>${esc(x.i)}</td><td>${esc(x.frames)}</td><td>${esc(x.br)}</td></tr>`).join('')}</tbody></table>`;
+  const players=[...(data.players||[])].sort(alpha), matches=data.matches||{}, out=[];
+  for(let i=0;i<players.length;i++)for(let j=i+1;j<players.length;j++){
+    const a=players[i],b=players[j],m=matches[idFor(a,b)]||{};
+    let st='NEPROGRAMAT',cls='',details='';
+    if(m.score1!==undefined&&m.score2!==undefined){st='JUCAT';cls='played';details=`Scor ${m.score1}-${m.score2} • B&R ${m.break1||0}-${m.break2||0}`;}
+    else if(m.date&&m.time){st='PROGRAMAT';cls='scheduled';details=`${fmtDate(m.date)} • ${m.time}`;}
+    out.push(`<div class="match"><b>${esc(a)} – ${esc(b)}</b> <span class="status ${cls}">${st}</span>${details?`<div class="muted" style="margin-top:4px">${esc(details)}</div>`:''}</div>`);
+  }
+  document.getElementById('matches').innerHTML=out.join('');
+ }catch(e){
+  document.getElementById('ranking').innerHTML=`<div class="error">${esc(e.message)}</div>`;
+  document.getElementById('matches').innerHTML='';
+  document.getElementById('updated').textContent='';
+ }
+}
+load();
+</script>
+</body></html>
